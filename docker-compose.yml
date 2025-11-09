@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  dashticz:
+    # Build from local Dockerfile or use image
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Customize your timezone
+        TIMEZONE: Europe/Amsterdam
+        # Choose branch: master (stable) or beta (latest features)
+        DASHTICZ_BRANCH: master
+    
+    # Alternative: Use pre-built image (uncomment and comment out build section)
+    # image: dashticz:latest
+    
+    container_name: dashticz
+    
+    # Network mode - use bridge for isolated network or host for direct access
+    network_mode: bridge
+    
+    # Port mapping - change 8082 to your preferred port
+    ports:
+      - "8082:80"
+    
+    # Environment variables
+    environment:
+      # Set your Domoticz server IP:port
+      DOMOTICZ_IP: "192.168.1.100:8080"
+      # PHP settings
+      PHP_MEMORY_LIMIT: "256M"
+      PHP_POST_MAX_SIZE: "50M"
+      PHP_UPLOAD_MAX_FILESIZE: "50M"
+      PHP_MAX_EXECUTION_TIME: "300"
+    
+    # Volumes for persistent data
+    volumes:
+      # Mount custom configuration files
+      - ./dashticz-data/custom:/var/www/html/dashticz/custom
+      # Mount for custom icons/images
+      - ./dashticz-data/img/custom:/var/www/html/dashticz/img/custom
+      # Mount for Apache logs
+      - ./dashticz-data/logs:/var/log/apache2
+      # Local time
+      - /etc/localtime:/etc/localtime:ro
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # Optional: Add Domoticz service if you want to run both in the same stack
+  # domoticz:
+  #   image: linuxserver/domoticz:latest
+  #   container_name: domoticz
+  #   environment:
+  #     - PUID=1000
+  #     - PGID=1000
+  #     - TZ=Europe/Amsterdam
+  #   volumes:
+  #     - ./domoticz-data:/config
+  #   ports:
+  #     - "8080:8080"
+  #     - "6144:6144"
+  #     - "1443:1443"
+  #   restart: unless-stopped
+
+# Optional: Create a custom network
+networks:
+  default:
+    name: dashticz-network
+    driver: bridge

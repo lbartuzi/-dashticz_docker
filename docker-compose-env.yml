@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  dashticz:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TIMEZONE: ${TIMEZONE:-Europe/Amsterdam}
+        DASHTICZ_BRANCH: ${DASHTICZ_BRANCH:-master}
+    
+    # Alternative: Use pre-built image
+    # image: dashticz:latest
+    
+    container_name: ${CONTAINER_NAME:-dashticz}
+    
+    ports:
+      - "${DASHTICZ_PORT:-8082}:80"
+    
+    environment:
+      # Domoticz settings
+      DOMOTICZ_IP: ${DOMOTICZ_IP:-192.168.1.100:8080}
+      DOMOTICZ_USERNAME: ${DOMOTICZ_USERNAME:-}
+      DOMOTICZ_PASSWORD: ${DOMOTICZ_PASSWORD:-}
+      
+      # PHP settings
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT:-256M}
+      PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE:-50M}
+      PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE:-50M}
+      PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME:-300}
+      
+      # System settings
+      TZ: ${TIMEZONE:-Europe/Amsterdam}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      
+      # Debug mode
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+    
+    volumes:
+      # Persistent data directories
+      - ./dashticz-data/custom:/var/www/html/dashticz/custom
+      - ./dashticz-data/img:/var/www/html/dashticz/img/custom
+      - ./dashticz-data/logs:/var/log/apache2
+      
+      # Optional: Mount entire dashticz directory for development
+      # - ./dashticz:/var/www/html/dashticz
+      
+      # System time
+      - /etc/localtime:/etc/localtime:ro
+    
+    restart: ${RESTART_POLICY:-unless-stopped}
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-1.0}'
+          memory: ${MEMORY_LIMIT:-512M}
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    logging:
+      driver: ${LOG_DRIVER:-json-file}
+      options:
+        max-size: ${LOG_MAX_SIZE:-10m}
+        max-file: "${LOG_MAX_FILE:-3}"
+    
+    networks:
+      - dashticz-network
+
+  # Optional: Domoticz container
+  # Uncomment to run Domoticz alongside Dashticz
+  # domoticz:
+  #   image: linuxserver/domoticz:latest
+  #   container_name: domoticz
+  #   environment:
+  #     - PUID=${PUID:-1000}
+  #     - PGID=${PGID:-1000}
+  #     - TZ=${TIMEZONE:-Europe/Amsterdam}
+  #   volumes:
+  #     - ./domoticz-data:/config
+  #   ports:
+  #     - "8080:8080"
+  #     - "6144:6144"
+  #     - "1443:1443"
+  #   devices:
+  #     # Add your USB devices here if needed
+  #     # - /dev/ttyUSB0:/dev/ttyUSB0
+  #     # - /dev/ttyACM0:/dev/ttyACM0
+  #   restart: ${RESTART_POLICY:-unless-stopped}
+  #   networks:
+  #     - dashticz-network
+
+networks:
+  dashticz-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

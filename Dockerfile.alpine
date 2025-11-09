@@ -1,0 +1,104 @@
+# Dockerfile.alpine - Lightweight Alpine-based image for Dashticz
+# This creates a much smaller image (~100MB vs ~400MB)
+
+FROM alpine:3.18
+
+# Build arguments
+ARG TIMEZONE="Europe/Amsterdam"
+ARG DASHTICZ_BRANCH="master"
+
+# Install packages
+RUN apk add --no-cache \
+    apache2 \
+    apache2-utils \
+    apache2-ssl \
+    apache2-proxy \
+    php81 \
+    php81-apache2 \
+    php81-curl \
+    php81-xml \
+    php81-mbstring \
+    php81-zip \
+    php81-opcache \
+    php81-session \
+    php81-json \
+    php81-dom \
+    php81-openssl \
+    git \
+    curl \
+    tzdata \
+    bash
+
+# Set timezone
+RUN cp /usr/share/zoneinfo/${TIMEZONE} /etc/localtime && \
+    echo "${TIMEZONE}" > /etc/timezone
+
+# Configure PHP
+RUN echo "date.timezone = ${TIMEZONE}" > /etc/php81/conf.d/timezone.ini && \
+    echo "memory_limit = 256M" >> /etc/php81/php.ini && \
+    echo "upload_max_filesize = 50M" >> /etc/php81/php.ini && \
+    echo "post_max_size = 50M" >> /etc/php81/php.ini && \
+    echo "max_execution_time = 300" >> /etc/php81/php.ini
+
+# Configure Apache
+RUN mkdir -p /run/apache2 && \
+    chown -R apache:apache /run/apache2 && \
+    sed -i 's|#LoadModule rewrite_module|LoadModule rewrite_module|g' /etc/apache2/httpd.conf && \
+    sed -i 's|#LoadModule headers_module|LoadModule headers_module|g' /etc/apache2/httpd.conf && \
+    sed -i 's|#LoadModule expires_module|LoadModule expires_module|g' /etc/apache2/httpd.conf && \
+    sed -i 's|#LoadModule deflate_module|LoadModule deflate_module|g' /etc/apache2/httpd.conf
+
+# Set up document root
+RUN rm -rf /var/www/localhost/htdocs && \
+    mkdir -p /var/www/html
+
+# Clone Dashticz
+RUN git clone https://github.com/Dashticz/dashticz.git --branch ${DASHTICZ_BRANCH} --depth 1 /var/www/html/dashticz
+
+# Set permissions
+RUN chown -R apache:apache /var/www/html/dashticz && \
+    chmod -R 755 /var/www/html/dashticz
+
+# Create Apache virtual host
+RUN echo -e '\
+<VirtualHost *:80>\n\
+    DocumentRoot "/var/www/html/dashticz"\n\
+    <Directory "/var/www/html/dashticz">\n\
+        Options Indexes FollowSymLinks\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+    ErrorLog /var/log/apache2/error.log\n\
+    CustomLog /var/log/apache2/access.log combined\n\
+</VirtualHost>' > /etc/apache2/conf.d/dashticz.conf
+
+# Update Apache config to use /var/www/html
+RUN sed -i 's|/var/www/localhost/htdocs|/var/www/html/dashticz|g' /etc/apache2/httpd.conf
+
+# Create startup script
+RUN echo -e '#!/bin/sh\n\
+# Check if CONFIG.js exists\n\
+if [ ! -f /var/www/html/dashticz/custom/CONFIG.js ]; then\n\
+    if [ -f /var/www/html/dashticz/custom/CONFIG_DEFAULT.js ]; then\n\
+        cp /var/www/html/dashticz/custom/CONFIG_DEFAULT.js /var/www/html/dashticz/custom/CONFIG.js\n\
+        # Replace Domoticz IP if set\n\
+        if [ ! -z "$DOMOTICZ_IP" ]; then\n\
+            sed -i "s|192.168.1.3:8084|$DOMOTICZ_IP|g" /var/www/html/dashticz/custom/CONFIG.js\n\
+        fi\n\
+    fi\n\
+fi\n\
+# Fix permissions\n\
+chown -R apache:apache /var/www/html/dashticz/custom\n\
+# Start Apache in foreground\n\
+exec httpd -D FOREGROUND' > /usr/local/bin/start-dashticz.sh && \
+    chmod +x /usr/local/bin/start-dashticz.sh
+
+# Expose port
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s \
+    CMD wget -q -O /dev/null http://localhost/ || exit 1
+
+# Start Apache
+CMD ["/usr/local/bin/start-dashticz.sh"]
