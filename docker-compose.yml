@@ -36,14 +36,18 @@ services:
     
     # Volumes for persistent data
     volumes:
+    # Using named volumes - these will preserve container data
+      - dashticz-custom:/var/www/html/dashticz/custom
+      - dashticz-img:/var/www/html/dashticz/img
+      - dashticz-logs:/var/log/apache2
       # Mount custom configuration files
-      - ./dashticz-data/custom:/var/www/html/dashticz/custom
+      #- ./dashticz-data/custom:/var/www/html/dashticz/custom
       # Mount for custom icons/images
-      - ./dashticz-data/img/custom:/var/www/html/dashticz/img/custom
+      #- ./dashticz-data/img/custom:/var/www/html/dashticz/img/custom
       # Mount for Apache logs
-      - ./dashticz-data/logs:/var/log/apache2
+      #- ./dashticz-data/logs:/var/log/apache2
       # Local time
-      - /etc/localtime:/etc/localtime:ro
+      #- /etc/localtime:/etc/localtime:ro
     
     # Restart policy
     restart: unless-stopped
@@ -81,7 +85,15 @@ services:
   #     - "6144:6144"
   #     - "1443:1443"
   #   restart: unless-stopped
-
+# Named volumes - Docker will auto-populate these with container content
+volumes:
+  dashticz-custom:
+    driver: local
+  dashticz-img:
+    driver: local
+  dashticz-logs:
+    driver: local
+    
 # Optional: Create a custom network
 networks:
   default:
