@@ -2,6 +2,14 @@ version: '3.8'
 
 services:
   dashticz:
+  #build:
+  #    context: .
+  #    dockerfile: Dockerfile
+  #    args:
+  #      TIMEZONE: ${TIMEZONE:-Europe/Amsterdam}
+  #      DASHTICZ_BRANCH: ${DASHTICZ_BRANCH:-master}
+    
+    # Alternative: Use pre-built image
     image: dashticz:latest
     container_name: ${CONTAINER_NAME:-dashticz}
     
